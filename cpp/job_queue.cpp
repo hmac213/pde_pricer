@@ -114,11 +114,11 @@ void JobQueue::remove_job(const OptionJob& job) {
 
 OptionJobResult JobQueue::run_job(const OptionJob& job) {
     Option* option = job.get_option();
-    MeshData mesh = initialize_mesh(*option, job.get_S_max(), job.get_J(), job.get_N());
+    MeshData mesh = initialize_mesh(*option, job.get_S_max(), job.get_N(), job.get_J());
     double* grid_values = solve_crank_nicolson(
         *option,
         job.get_S_max(),
-        job.T,
+        job.get_T(),
         job.get_N(),
         job.get_J(),
         mesh.V,
@@ -126,13 +126,16 @@ OptionJobResult JobQueue::run_job(const OptionJob& job) {
         mesh.t
     );
     
-    // calculate fair price from resulting grid
-    int fair_price_index = (int)(job.current_price * 100);
-    int time_index = 0; // estimating present fair value (t = 0)
-    double fair_price = *(grid_values + fair_price_index * (job.get_J() + 1) + time_index);
+    // Calculate fair price from resulting grid
+    double dS = job.get_S_max() / job.get_J();
+    int space_index = std::min((int)(job.get_current_price() / dS), job.get_J());
+    int time_index = 0; // Present value (t = 0)
+    
+    // Grid is indexed as V[time_step * (J+1) + space_step]
+    double fair_price = *(grid_values + time_index * (job.get_J() + 1) + space_index);
 
     // create result object
-    OptionJobResult result(job.ticker, job.option_type, job.K, job.T, job.current_price, fair_price);
+    OptionJobResult result(job.get_ticker(), job.get_option_type(), job.get_K(), job.get_T(), job.get_current_price(), fair_price);
     return result;
 }
 

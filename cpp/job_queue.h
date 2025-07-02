@@ -15,16 +15,6 @@
 // Option jobs
 class OptionJob {
 public:
-    // public for convenience (immutable after construction)
-    const std::string ticker;
-    const std::string option_type;
-    const double K;
-    const int T;
-    const double current_price;
-    const double r; // r and sigma are calculated from python market
-    const double sigma;
-    const double q;
-
     OptionJob(
         std::string ticker,
         std::string option_type,
@@ -45,7 +35,17 @@ public:
     // Destructor
     ~OptionJob() { delete option; }
     
-    // Getters for private members
+    // Getter methods for all members
+    inline const std::string& get_ticker() const { return ticker; }
+    inline const std::string& get_option_type() const { return option_type; }
+    inline double get_K() const { return K; }
+    inline int get_T() const { return T; }
+    inline double get_current_price() const { return current_price; }
+    inline double get_r() const { return r; }
+    inline double get_sigma() const { return sigma; }
+    inline double get_q() const { return q; }
+    
+    // Getters for computed private members
     inline double get_S_max() const { return S_max; }
     inline int get_J() const { return J; }
     inline int get_N() const { return N; }
@@ -59,7 +59,17 @@ public:
     }
 
 private:
-    // private members since they're implementation details
+    // Core option parameters
+    std::string ticker;
+    std::string option_type;
+    double K;
+    int T;
+    double current_price;
+    double r; // r and sigma are calculated from python market
+    double sigma;
+    double q;
+    
+    // Computed members since they're implementation details
     double S_max;
     int J;
     int N;

@@ -41,10 +41,17 @@ PYBIND11_MODULE(option_solver_cpp, m) {
         .def(py::init<std::string, std::string, double, int, double, double, double, double>(),
             py::arg("ticker"), py::arg("option_type"), py::arg("K"), py::arg("T"),
             py::arg("current_price"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0)
-        .def_readonly("ticker", &OptionJob::ticker)
-        .def_readonly("option_type", &OptionJob::option_type)
-        .def_readonly("K", &OptionJob::K)
-        .def_readonly("T", &OptionJob::T);
+        .def_property_readonly("ticker", &OptionJob::get_ticker)
+        .def_property_readonly("option_type", &OptionJob::get_option_type)
+        .def_property_readonly("K", &OptionJob::get_K)
+        .def_property_readonly("T", &OptionJob::get_T)
+        .def_property_readonly("current_price", &OptionJob::get_current_price)
+        .def_property_readonly("r", &OptionJob::get_r)
+        .def_property_readonly("sigma", &OptionJob::get_sigma)
+        .def_property_readonly("q", &OptionJob::get_q)
+        .def_property_readonly("S_max", &OptionJob::get_S_max)
+        .def_property_readonly("J", &OptionJob::get_J)
+        .def_property_readonly("N", &OptionJob::get_N);
 
     py::class_<OptionJobResult>(m, "OptionJobResult")
         .def_readonly("ticker", &OptionJobResult::ticker)
@@ -57,6 +64,7 @@ PYBIND11_MODULE(option_solver_cpp, m) {
     py::class_<JobQueue>(m, "JobQueue")
         .def(py::init<>())
         .def("add_or_replace_job", &JobQueue::add_or_replace_job)
+        .def("run_job", &JobQueue::run_job)
         .def("size", &JobQueue::size);
 
     py::class_<JobQueueProcessor>(m, "JobQueueProcessor")
