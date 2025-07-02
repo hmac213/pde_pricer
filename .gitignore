@@ -1,3 +1,21 @@
 venv
 __pycache__
 .pytest_cache
+
+# Build artifacts and compiled binaries
+build/
+*.so
+*.dll
+*.pyd
+*.dylib
+*.egg-info/
+
+# C++ object files and intermediate build files
+*.o
+*.obj
+*.lib
+*.a
+
+# Python compiled bytecode
+*.pyc
+*.pyo

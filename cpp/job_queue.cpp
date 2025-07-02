@@ -2,6 +2,9 @@
 #include "solvers/mesh.h"
 #include "solvers/crank_nicolson.h"
 #include <algorithm>
+#include <pybind11/pybind11.h>
+
+namespace py = pybind11;
 
 // OptionJob implementation
 
@@ -13,10 +16,10 @@ OptionJob::OptionJob(
     double current_price,
     double r,
     double sigma,
-    double q = 0.0
+    double q
 ) : ticker(ticker), option_type(option_type), K(K), T(T), 
     current_price(current_price), r(r), sigma(sigma), q(q) { 
-    create_option();
+    option = create_option();
     S_max = calculate_S_max();
     J = calculate_J();
     N = calculate_N();
@@ -43,6 +46,41 @@ int OptionJob::calculate_N() const {
     int min_steps = 200;
     int calculated_steps = T * steps_per_day;
     return std::max(calculated_steps, min_steps);
+}
+
+// Copy constructor implementation
+OptionJob::OptionJob(const OptionJob& other)
+    : ticker(other.ticker), option_type(other.option_type), K(other.K), T(other.T),
+      current_price(other.current_price), r(other.r), sigma(other.sigma), q(other.q),
+      S_max(other.S_max), J(other.J), N(other.N) {
+    // Create a new copy of the option
+    option = create_option();
+}
+
+// Assignment operator implementation
+OptionJob& OptionJob::operator=(const OptionJob& other) {
+    if (this != &other) {
+        // Clean up existing option
+        delete option;
+        
+        // Copy all members
+        ticker = other.ticker;
+        option_type = other.option_type;
+        K = other.K;
+        T = other.T;
+        current_price = other.current_price;
+        r = other.r;
+        sigma = other.sigma;
+        q = other.q;
+        
+        S_max = other.S_max;
+        J = other.J;
+        N = other.N;
+        
+        // Create a new copy of the option
+        option = create_option();
+    }
+    return *this;
 }
 
 Option* OptionJob::create_option() {
@@ -74,10 +112,10 @@ void JobQueue::remove_job(const OptionJob& job) {
     seen_keys.erase(job);
 }
 
-double* JobQueue::run_job(const OptionJob& job) {
+OptionJobResult JobQueue::run_job(const OptionJob& job) {
     Option* option = job.get_option();
     MeshData mesh = initialize_mesh(*option, job.get_S_max(), job.get_J(), job.get_N());
-    double* result = solve_crank_nicolson(
+    double* grid_values = solve_crank_nicolson(
         *option,
         job.get_S_max(),
         job.T,
@@ -87,9 +125,32 @@ double* JobQueue::run_job(const OptionJob& job) {
         mesh.S,
         mesh.t
     );
+    
+    // calculate fair price from resulting grid
+    int fair_price_index = (int)(job.current_price * 100);
+    int time_index = 0; // estimating present fair value (t = 0)
+    double fair_price = *(grid_values + fair_price_index * (job.get_J() + 1) + time_index);
+
+    // create result object
+    OptionJobResult result(job.ticker, job.option_type, job.K, job.T, job.current_price, fair_price);
     return result;
 }
 
+
+std::vector<OptionJob> JobQueue::get_all_jobs() {
+    std::lock_guard<std::mutex> lock(job_queue_mutex);
+    std::vector<OptionJob> jobs;
+    
+    while (!job_queue.empty()) {
+        jobs.push_back(job_queue.front());
+        job_queue.pop();
+    }
+    
+    // Clear the seen_keys set since we're processing all jobs
+    seen_keys.clear();
+    
+    return jobs;
+}
 
 size_t JobQueue::size() const {
     std::lock_guard<std::mutex> lock(job_queue_mutex);
@@ -103,19 +164,39 @@ OptionJob JobQueue::front() const {
 
 // JobQueueProcessor implementation
 
-std::vector<OptionJobResult> JobQueueProcessor::run_batch(const std::vector<OptionJob>& jobs, const int batch_size) {
-    std::vector<OptionJobResult> results;
-    threads.reserve(batch_size);
+void JobQueueProcessor::run_batch(JobQueue& queue, std::function<void(OptionJobResult)> callback) {
+    // Get all jobs from the queue
+    std::vector<OptionJob> jobs = queue.get_all_jobs();
+    
+    if (jobs.empty()) return;
+    
+    std::vector<std::thread> threads;
+    
+    // Use minimum of available threads and number of jobs
+    size_t actual_threads = std::min(num_threads, jobs.size());
+    threads.reserve(actual_threads);
 
-    for (size_t i = 0; i < batch_size; ++i) {
-        threads.emplace_back([this, &jobs, &results]() {
-            OptionJob job = job_queue.front();
+    size_t jobs_per_thread = jobs.size() / actual_threads;
+    size_t remainder = jobs.size() % actual_threads;
+
+    for (size_t thread = 0; thread < actual_threads; ++thread) {
+        size_t start = thread * jobs_per_thread + std::min(thread, remainder);
+        size_t end = start + jobs_per_thread + (thread < remainder ? 1 : 0);
+
+        threads.emplace_back([this, &jobs, &callback, start, end]() {
+            for (size_t i = start; i < end; ++i) {
+                OptionJobResult result = job_queue.run_job(jobs[i]);
+                
+                {
+                    py::gil_scoped_acquire gil;
+                    std::lock_guard<std::mutex> lock(callback_mutex);
+                    callback(result);
+                }
+            }
         });
     }
 
     for (auto& thread : threads) {
         thread.join();
     }
-
-    return results;
 }

@@ -15,9 +15,6 @@ ext_modules = [
         include_dirs=["cpp", pybind11.get_cmake_dir()],
         cxx_std=14,
         define_macros=[("VERSION_INFO", '"dev"')],
-        # OpenMP support
-        extra_compile_args=["-fopenmp"],
-        extra_link_args=["-fopenmp"],
     ),
 ]
 

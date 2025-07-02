@@ -9,6 +9,7 @@
 #include <memory>
 #include <tuple>
 #include <thread>
+#include <functional>
 #include "models/option.h"
 
 // Option jobs
@@ -20,7 +21,7 @@ public:
     const double K;
     const int T;
     const double current_price;
-    const double r;
+    const double r; // r and sigma are calculated from python market
     const double sigma;
     const double q;
 
@@ -32,9 +33,16 @@ public:
         double current_price,
         double r,
         double sigma,
-        double q = 0.0
+        double q
     );
     
+    // Copy constructor
+    OptionJob(const OptionJob& other);
+    
+    // Assignment operator
+    OptionJob& operator=(const OptionJob& other);
+    
+    // Destructor
     ~OptionJob() { delete option; }
     
     // Getters for private members
@@ -43,17 +51,11 @@ public:
     inline int get_N() const { return N; }
     inline Option* get_option() const { return option; }
 
-    // Comparison operators for std::set uniqueness (ticker, type, K, T)
+    // Comparison operators for uniqueness
     bool operator<(const OptionJob& other) const {
-        return std::tie(ticker, option_type, K, T) < 
-               std::tie(other.ticker, other.option_type, other.K, other.T);
-    }
-    
-    bool operator==(const OptionJob& other) const {
-        return ticker == other.ticker && 
-               option_type == other.option_type && 
-               K == other.K && 
-               T == other.T;
+        return
+            std::tie(ticker, option_type, K, T) < 
+            std::tie(other.ticker, other.option_type, other.K, other.T);
     }
 
 private:
@@ -63,14 +65,14 @@ private:
     int N;
     Option* option;
 
-    // private methods
+    // private helper methods for initialization
     double calculate_S_max() const;
     int calculate_J() const;
     int calculate_N() const;
     Option* create_option();
 };
 
-class OptionJobResult {
+struct OptionJobResult {
     std::string ticker;
     std::string option_type;
     double K;
@@ -96,7 +98,8 @@ private:
 public:
     void add_or_replace_job(const OptionJob& job);
     void remove_job(const OptionJob& job);
-    double* run_job(const OptionJob& job);
+    OptionJobResult run_job(const OptionJob& job);
+    std::vector<OptionJob> get_all_jobs();  // Get all jobs and clear the queue
     size_t size() const;
     OptionJob front() const;
 };
@@ -104,17 +107,16 @@ public:
 class JobQueueProcessor {
 private:
     JobQueue job_queue;
-    std::vector<std::thread> threads;
+    size_t num_threads;
+    std::mutex callback_mutex;
 public:
-    JobQueueProcessor(size_t num_threads) : threads(num_threads) {}
-    ~JobQueueProcessor() {
-        stop();
-        join();
-    }
+    JobQueueProcessor() : num_threads(std::thread::hardware_concurrency()) { if (num_threads == 0) { num_threads = 1; } }
 
-    OptionJobResult run_batch(const std::vector<OptionJob>& jobs, const int batch_size);
-    void stop();
-    void join();
+    // override default constructor
+    JobQueueProcessor(size_t num_threads) : num_threads(num_threads) { if (num_threads == 0) { num_threads = 1; } }
+
+    // Process jobs from queue and stream results via callback
+    void run_batch(JobQueue& queue, std::function<void(OptionJobResult)> callback);
 };
 
 #endif // JOB_QUEUE_H 

@@ -7,6 +7,7 @@
 class Option {
 public:
     Option(double K_, double T_, double r_, double sigma_, double q_ = 0.0);
+    virtual ~Option() = default;  // Virtual destructor for proper cleanup
 
     virtual double payoff(double S) const = 0;
     virtual void option_price_boundary(double* V_time, const double* S, const double t, int size) const = 0;

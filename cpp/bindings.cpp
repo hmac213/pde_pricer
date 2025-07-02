@@ -1,8 +1,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
+#include <pybind11/functional.h>
 #include "models/option.h"
 #include "solvers/crank_nicolson.h"
+#include "job_queue.h"
 
 namespace py = pybind11;
 
@@ -20,17 +22,46 @@ PYBIND11_MODULE(option_solver_cpp, m) {
     
     py::class_<EuropeanCall, Option>(m, "EuropeanCall")
         .def(py::init<double, double, double, double, double>(),
-             py::arg("K"), py::arg("T"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0);
+            py::arg("K"), py::arg("T"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0);
              
     py::class_<EuropeanPut, Option>(m, "EuropeanPut")
         .def(py::init<double, double, double, double, double>(),
-             py::arg("K"), py::arg("T"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0);
+            py::arg("K"), py::arg("T"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0);
              
     py::class_<AmericanCall, Option>(m, "AmericanCall")
         .def(py::init<double, double, double, double, double>(),
-             py::arg("K"), py::arg("T"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0);
+            py::arg("K"), py::arg("T"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0);
              
     py::class_<AmericanPut, Option>(m, "AmericanPut")
         .def(py::init<double, double, double, double, double>(),
-             py::arg("K"), py::arg("T"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0);
-} 
+            py::arg("K"), py::arg("T"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0);
+
+    // Expose job system
+    py::class_<OptionJob>(m, "OptionJob")
+        .def(py::init<std::string, std::string, double, int, double, double, double, double>(),
+            py::arg("ticker"), py::arg("option_type"), py::arg("K"), py::arg("T"),
+            py::arg("current_price"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0)
+        .def_readonly("ticker", &OptionJob::ticker)
+        .def_readonly("option_type", &OptionJob::option_type)
+        .def_readonly("K", &OptionJob::K)
+        .def_readonly("T", &OptionJob::T);
+
+    py::class_<OptionJobResult>(m, "OptionJobResult")
+        .def_readonly("ticker", &OptionJobResult::ticker)
+        .def_readonly("option_type", &OptionJobResult::option_type)
+        .def_readonly("K", &OptionJobResult::K)
+        .def_readonly("T", &OptionJobResult::T)
+        .def_readonly("current_price", &OptionJobResult::current_price)
+        .def_readonly("fair_value", &OptionJobResult::fair_value);
+
+    py::class_<JobQueue>(m, "JobQueue")
+        .def(py::init<>())
+        .def("add_or_replace_job", &JobQueue::add_or_replace_job)
+        .def("size", &JobQueue::size);
+
+    py::class_<JobQueueProcessor>(m, "JobQueueProcessor")
+        .def(py::init<>())
+        .def("run_batch", &JobQueueProcessor::run_batch,
+            py::call_guard<py::gil_scoped_release>(),  // Release GIL for parallel processing
+            "Process jobs from queue in parallel and stream results via callback");
+}
