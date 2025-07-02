@@ -94,6 +94,9 @@ double* solve_crank_nicolson(
         for (int j = 1; j < J; j++) {
             *(V + n * (J + 1) + j) = thomas_vector[j - 1];
         }
+
+        // Apply early exercise condition for American options after solving for the time step
+        option.early_exercise_condition(V + n * (J + 1), S, t[n], J + 1);
     }
 
     option.option_price_boundary(V, S, t[0], J + 1);

@@ -1,0 +1,13 @@
+services:
+  backend:
+    build:
+      context: .
+    ports:
+      - 8000:8000
+    depends_on:
+      - redis
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - 6379:6379

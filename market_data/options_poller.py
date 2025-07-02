@@ -1,7 +1,6 @@
 import yfinance as yf
 import time
 import pandas as pd
-from datetime import datetime
 from typing import List, Dict, Any
 import option_solver_cpp
 from market_data.calculate_annual_volatility import calculate_annual_volatility
@@ -109,29 +108,41 @@ def create_option_jobs(options_data: Dict[str, List[Dict[str, Any]]]) -> List[op
             
         # Calculate market parameters once per ticker
         try:
+            stock_info = yf.Ticker(ticker).info
             sigma = calculate_annual_volatility(ticker)
             r = calculate_risk_free_rate()
+
+            q = stock_info.get('dividendYield', 0.0) or 0.0
         except Exception as e:
+            print(f"Warning: Could not fetch market data for {ticker}. Skipping. Error: {e}")
             continue  # Skip this ticker if we can't get market data
         
         # Create OptionJob for each option
         for opt in options_list:
+            if not opt or not opt.get('strike_price'):
+                continue
             try:
                 # Map option type to C++ expected format
                 option_type = "american_call" if opt['type'] == 'call' else "american_put"
+                
+                # Convert DTE to years for the C++ model
+                T_years = opt['dte'] / 365.0
                 
                 job = option_solver_cpp.OptionJob(
                     ticker=opt['ticker'],
                     option_type=option_type,
                     K=opt['strike_price'],
-                    T=opt['dte'],
+                    T=T_years, # Pass T in years
                     current_price=opt['underlying_price'],
+                    current_option_price=opt['option_price'],
                     r=r,
-                    sigma=sigma
+                    sigma=sigma,
+                    q=q
                 )
                 jobs.append(job)
                 
             except Exception as e:
+                print(f"Warning: Could not create job for option {opt}. Skipping. Error: {e}")
                 continue  # Skip individual options that fail
     
     return jobs
@@ -165,30 +176,3 @@ def continuous_poll_and_process(tickers: List[str], callback_function, time_inte
             processor.run_batch(job_queue, callback_function)
         
         time.sleep(time_interval)
-
-# Example usage
-def example_usage():
-    """
-    Example of how to use the continuous polling system
-    """
-    def result_handler(result):
-        """Callback function to handle each computed result"""
-        print(f"Ticker: {result.ticker}")
-        print(f"Option: {result.option_type} K={result.K} T={result.T}")
-        print(f"Current Price: ${result.current_price:.2f}")
-        print(f"Fair Value: ${result.fair_value:.2f}")
-        print("-" * 40)
-    
-    # Start continuous polling and processing
-    tickers = ["AAPL", "GOOGL", "MSFT"]
-    
-    print("Starting continuous options polling and processing...")
-    print("Press Ctrl+C to stop")
-    
-    try:
-        continuous_poll_and_process(tickers, result_handler, time_interval=30)
-    except KeyboardInterrupt:
-        print("\nStopping...")
-
-if __name__ == "__main__":
-    example_usage()

@@ -12,13 +12,14 @@ OptionJob::OptionJob(
     std::string ticker,
     std::string option_type,
     double K,
-    int T,
+    double T,
     double current_price,
+    double current_option_price,
     double r,
     double sigma,
     double q
 ) : ticker(ticker), option_type(option_type), K(K), T(T), 
-    current_price(current_price), r(r), sigma(sigma), q(q) { 
+    current_price(current_price), current_option_price(current_option_price), r(r), sigma(sigma), q(q) { 
     option = create_option();
     S_max = calculate_S_max();
     J = calculate_J();
@@ -42,16 +43,19 @@ int OptionJob::calculate_J() const {
 }
 
 int OptionJob::calculate_N() const {
+    // T is now in years, so multiply by 365 to get days
+    int days = static_cast<int>(T * 365);
     int steps_per_day = 10;
     int min_steps = 200;
-    int calculated_steps = T * steps_per_day;
+    int calculated_steps = days * steps_per_day;
     return std::max(calculated_steps, min_steps);
 }
 
 // Copy constructor implementation
 OptionJob::OptionJob(const OptionJob& other)
     : ticker(other.ticker), option_type(other.option_type), K(other.K), T(other.T),
-      current_price(other.current_price), r(other.r), sigma(other.sigma), q(other.q),
+      current_price(other.current_price), current_option_price(other.current_option_price), 
+      r(other.r), sigma(other.sigma), q(other.q),
       S_max(other.S_max), J(other.J), N(other.N) {
     // Create a new copy of the option
     option = create_option();
@@ -69,6 +73,7 @@ OptionJob& OptionJob::operator=(const OptionJob& other) {
         K = other.K;
         T = other.T;
         current_price = other.current_price;
+        current_option_price = other.current_option_price;
         r = other.r;
         sigma = other.sigma;
         q = other.q;
@@ -135,7 +140,7 @@ OptionJobResult JobQueue::run_job(const OptionJob& job) {
     double fair_price = *(grid_values + time_index * (job.get_J() + 1) + space_index);
 
     // create result object
-    OptionJobResult result(job.get_ticker(), job.get_option_type(), job.get_K(), job.get_T(), job.get_current_price(), fair_price);
+    OptionJobResult result(job.get_ticker(), job.get_option_type(), job.get_K(), job.get_T(), job.get_current_price(), job.get_current_option_price(), fair_price);
     return result;
 }
 

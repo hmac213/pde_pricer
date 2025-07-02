@@ -1,35 +1,32 @@
 import yfinance as yf
 import pandas as pd
+from datetime import datetime, timedelta
 
-def calculate_risk_free_rate(period='1y'):
+# T-Bill symbols can change, but this is a common one for the 13-week (3-month) bill
+TREASURY_BILL_TICKER = "^IRX" 
+
+def get_most_recent_rate(ticker: str) -> float:
     """
-    Calculate daily risk-free rate using Treasury bill rates
-    
-    Parameters:
-    - period: Time period for rate calculation ('1mo', '3mo', '1y')
-    
-    Returns:
-    - Daily risk-free rate
+    Fetches the most recent closing price for a given ticker,
+    which for T-bills represents the annualized yield.
     """
-    
     try:
-        # Get 3-month Treasury bill rate (most common proxy for risk-free rate)
-        # Using ^IRX (13-week Treasury bill yield)
-        treasury = yf.Ticker("^IRX")
-        hist = treasury.history(period=period)
-        
+        t_bill = yf.Ticker(ticker)
+        # Get historical data for the last 5 days to ensure we get a value
+        hist = t_bill.history(period="5d")
         if hist.empty:
-            # Fallback to a reasonable default
-            print("Warning: Could not fetch Treasury rate, using default 4.5%")
-            annual_rate = 0.045
-        else:
-            # Get the most recent rate (already in percentage)
-            latest_rate = hist['Close'].iloc[-1]
-            annual_rate = latest_rate / 100  # Convert percentage to decimal
-        
-        return annual_rate
-        
+            raise ValueError(f"No historical data for {ticker}")
+        # The 'Close' price for ^IRX is the yield percentage
+        most_recent_yield = hist['Close'].iloc[-1]
+        return most_recent_yield / 100.0  # Convert from percentage to decimal
     except Exception as e:
-        print(f"Error fetching Treasury rate: {e}")
-        print("Using default rate of 4.5% annually")
-        return 0.045
+        # Fallback to a default rate if fetching fails
+        print(f"Warning: Could not fetch T-bill rate for {ticker}. Error: {e}. Falling back to default 5%.")
+        return 0.05
+
+def calculate_risk_free_rate() -> float:
+    """
+    Calculates the risk-free rate using the 13-week Treasury Bill yield (^IRX).
+    This is a standard proxy for the short-term risk-free rate in option pricing.
+    """
+    return get_most_recent_rate(TREASURY_BILL_TICKER)

@@ -19,8 +19,9 @@ public:
         std::string ticker,
         std::string option_type,
         double K,
-        int T,
+        double T,
         double current_price,
+        double current_option_price,
         double r,
         double sigma,
         double q
@@ -39,8 +40,9 @@ public:
     inline const std::string& get_ticker() const { return ticker; }
     inline const std::string& get_option_type() const { return option_type; }
     inline double get_K() const { return K; }
-    inline int get_T() const { return T; }
+    inline double get_T() const { return T; }
     inline double get_current_price() const { return current_price; }
+    inline double get_current_option_price() const { return current_option_price; }
     inline double get_r() const { return r; }
     inline double get_sigma() const { return sigma; }
     inline double get_q() const { return q; }
@@ -63,8 +65,9 @@ private:
     std::string ticker;
     std::string option_type;
     double K;
-    int T;
+    double T;
     double current_price;
+    double current_option_price;
     double r; // r and sigma are calculated from python market
     double sigma;
     double q;
@@ -86,18 +89,20 @@ struct OptionJobResult {
     std::string ticker;
     std::string option_type;
     double K;
-    int T;
+    double T;
     double current_price;
+    double current_option_price;
     double fair_value; // computed by the PDE solver
 
     OptionJobResult(
         std::string ticker,
         std::string option_type,
         double K,
-        int T,
+        double T,
         double current_price,
+        double current_option_price,
         double fair_value
-    ) : ticker(ticker), option_type(option_type), K(K), T(T), current_price(current_price), fair_value(fair_value) {}
+    ) : ticker(ticker), option_type(option_type), K(K), T(T), current_price(current_price), current_option_price(current_option_price), fair_value(fair_value) {}
 };
 
 class JobQueue {

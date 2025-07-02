@@ -38,14 +38,15 @@ PYBIND11_MODULE(option_solver_cpp, m) {
 
     // Expose job system
     py::class_<OptionJob>(m, "OptionJob")
-        .def(py::init<std::string, std::string, double, int, double, double, double, double>(),
+        .def(py::init<std::string, std::string, double, double, double, double, double, double, double>(),
             py::arg("ticker"), py::arg("option_type"), py::arg("K"), py::arg("T"),
-            py::arg("current_price"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0)
+            py::arg("current_price"), py::arg("current_option_price"), py::arg("r"), py::arg("sigma"), py::arg("q") = 0.0)
         .def_property_readonly("ticker", &OptionJob::get_ticker)
         .def_property_readonly("option_type", &OptionJob::get_option_type)
         .def_property_readonly("K", &OptionJob::get_K)
         .def_property_readonly("T", &OptionJob::get_T)
         .def_property_readonly("current_price", &OptionJob::get_current_price)
+        .def_property_readonly("current_option_price", &OptionJob::get_current_option_price)
         .def_property_readonly("r", &OptionJob::get_r)
         .def_property_readonly("sigma", &OptionJob::get_sigma)
         .def_property_readonly("q", &OptionJob::get_q)
@@ -59,6 +60,7 @@ PYBIND11_MODULE(option_solver_cpp, m) {
         .def_readonly("K", &OptionJobResult::K)
         .def_readonly("T", &OptionJobResult::T)
         .def_readonly("current_price", &OptionJobResult::current_price)
+        .def_readonly("current_option_price", &OptionJobResult::current_option_price)
         .def_readonly("fair_value", &OptionJobResult::fair_value);
 
     py::class_<JobQueue>(m, "JobQueue")
