@@ -4,3 +4,7 @@ matplotlib
 pytest
 yfinance
 pandas
+fastapi
+uvicorn
+pydantic
+pybind11

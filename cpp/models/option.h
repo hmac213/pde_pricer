@@ -10,6 +10,9 @@ public:
 
     virtual double payoff(double S) const = 0;
     virtual void option_price_boundary(double* V_time, const double* S, const double t, int size) const = 0;
+    
+    // Early exercise condition for American options (default: no early exercise)
+    virtual void early_exercise_condition(double* V_time, const double* S, const double t, int size) const {}
 
     // Inline getter methods
     inline double getK() const { return K; }
@@ -47,6 +50,24 @@ public:
     
     double payoff(double S) const override;
     void option_price_boundary(double* V_time, const double* S, const double t, int size) const override;
+};
+
+class AmericanCall : public Option {
+public:
+    AmericanCall(double K_, double T_, double r_, double sigma_, double q_ = 0.0);
+    
+    double payoff(double S) const override;
+    void option_price_boundary(double* V_time, const double* S, const double t, int size) const override;
+    void early_exercise_condition(double* V_time, const double* S, const double t, int size) const override;
+};
+
+class AmericanPut : public Option {
+public:
+    AmericanPut(double K_, double T_, double r_, double sigma_, double q_ = 0.0);
+    
+    double payoff(double S) const override;
+    void option_price_boundary(double* V_time, const double* S, const double t, int size) const override;
+    void early_exercise_condition(double* V_time, const double* S, const double t, int size) const override;
 };
 
 #endif // OPTION_H 
