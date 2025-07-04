@@ -1,6 +1,5 @@
 from setuptools import setup, Extension
 import pybind11
-import os
 
 cpp_args = [
     '-std=c++14',

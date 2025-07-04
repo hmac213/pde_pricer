@@ -120,18 +120,14 @@ public:
 };
 
 class JobQueueProcessor {
-private:
-    JobQueue job_queue;
-    size_t num_threads;
-    std::mutex callback_mutex;
 public:
-    JobQueueProcessor() : num_threads(std::thread::hardware_concurrency()) { if (num_threads == 0) { num_threads = 1; } }
-
-    // override default constructor
-    JobQueueProcessor(size_t num_threads) : num_threads(num_threads) { if (num_threads == 0) { num_threads = 1; } }
-
-    // Process jobs from queue and stream results via callback
+    JobQueueProcessor() : num_threads(std::thread::hardware_concurrency()) {}
     void run_batch(JobQueue& queue, std::function<void(OptionJobResult)> callback);
+
+private:
+    static OptionJobResult run_job_static(const OptionJob& job);
+    
+    const size_t num_threads;
 };
 
 #endif // JOB_QUEUE_H 

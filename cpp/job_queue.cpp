@@ -3,6 +3,11 @@
 #include "solvers/crank_nicolson.h"
 #include <algorithm>
 #include <pybind11/pybind11.h>
+#include <queue>
+#include <mutex>
+#include <vector>
+#include <thread>
+#include <functional>
 
 namespace py = pybind11;
 
@@ -117,34 +122,6 @@ void JobQueue::remove_job(const OptionJob& job) {
     seen_keys.erase(job);
 }
 
-OptionJobResult JobQueue::run_job(const OptionJob& job) {
-    Option* option = job.get_option();
-    MeshData mesh = initialize_mesh(*option, job.get_S_max(), job.get_N(), job.get_J());
-    double* grid_values = solve_crank_nicolson(
-        *option,
-        job.get_S_max(),
-        job.get_T(),
-        job.get_N(),
-        job.get_J(),
-        mesh.V,
-        mesh.S,
-        mesh.t
-    );
-    
-    // Calculate fair price from resulting grid
-    double dS = job.get_S_max() / job.get_J();
-    int space_index = std::min((int)(job.get_current_price() / dS), job.get_J());
-    int time_index = 0; // Present value (t = 0)
-    
-    // Grid is indexed as V[time_step * (J+1) + space_step]
-    double fair_price = *(grid_values + time_index * (job.get_J() + 1) + space_index);
-
-    // create result object
-    OptionJobResult result(job.get_ticker(), job.get_option_type(), job.get_K(), job.get_T(), job.get_current_price(), job.get_current_option_price(), fair_price);
-    return result;
-}
-
-
 std::vector<OptionJob> JobQueue::get_all_jobs() {
     std::lock_guard<std::mutex> lock(job_queue_mutex);
     std::vector<OptionJob> jobs;
@@ -171,40 +148,65 @@ OptionJob JobQueue::front() const {
 }
 
 // JobQueueProcessor implementation
+OptionJobResult JobQueueProcessor::run_job_static(const OptionJob& job) {
+    Option* option = job.get_option();
+    MeshData mesh = initialize_mesh(*option, job.get_S_max(), job.get_N(), job.get_J());
+    double* grid_values = solve_crank_nicolson(
+        *option,
+        job.get_S_max(),
+        job.get_T(),
+        job.get_N(),
+        job.get_J(),
+        mesh.V,
+        mesh.S,
+        mesh.t
+    );
+    
+    double dS = job.get_S_max() / job.get_J();
+    int space_index = std::min((int)(job.get_current_price() / dS), job.get_J());
+    double fair_price = *(grid_values + space_index);
+
+    OptionJobResult result(job.get_ticker(), job.get_option_type(), job.get_K(), job.get_T(), job.get_current_price(), job.get_current_option_price(), fair_price);
+    return result;
+}
 
 void JobQueueProcessor::run_batch(JobQueue& queue, std::function<void(OptionJobResult)> callback) {
-    // Get all jobs from the queue
     std::vector<OptionJob> jobs = queue.get_all_jobs();
-    
     if (jobs.empty()) return;
-    
+
+    std::queue<OptionJobResult> results_queue;
+    std::mutex results_mutex;
+
     std::vector<std::thread> threads;
-    
-    // Use minimum of available threads and number of jobs
     size_t actual_threads = std::min(num_threads, jobs.size());
     threads.reserve(actual_threads);
 
     size_t jobs_per_thread = jobs.size() / actual_threads;
     size_t remainder = jobs.size() % actual_threads;
+    
+    py::gil_scoped_release release_gil;
 
-    for (size_t thread = 0; thread < actual_threads; ++thread) {
-        size_t start = thread * jobs_per_thread + std::min(thread, remainder);
-        size_t end = start + jobs_per_thread + (thread < remainder ? 1 : 0);
-
-        threads.emplace_back([this, &jobs, &callback, start, end]() {
-            for (size_t i = start; i < end; ++i) {
-                OptionJobResult result = job_queue.run_job(jobs[i]);
-                
-                {
-                    py::gil_scoped_acquire gil;
-                    std::lock_guard<std::mutex> lock(callback_mutex);
-                    callback(result);
-                }
+    for (size_t i = 0; i < actual_threads; ++i) {
+        size_t start = i * jobs_per_thread + std::min(i, remainder);
+        size_t end = start + jobs_per_thread + (i < remainder ? 1 : 0);
+        
+        threads.emplace_back([&jobs, &results_queue, &results_mutex, start, end]() {
+            for (size_t j = start; j < end; ++j) {
+                OptionJobResult result = run_job_static(jobs[j]);
+                std::lock_guard<std::mutex> lock(results_mutex);
+                results_queue.push(result);
             }
         });
     }
 
     for (auto& thread : threads) {
         thread.join();
+    }
+    
+    py::gil_scoped_acquire acquire_gil;
+    
+    while (!results_queue.empty()) {
+        callback(results_queue.front());
+        results_queue.pop();
     }
 }

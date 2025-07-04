@@ -66,12 +66,9 @@ PYBIND11_MODULE(option_solver_cpp, m) {
     py::class_<JobQueue>(m, "JobQueue")
         .def(py::init<>())
         .def("add_or_replace_job", &JobQueue::add_or_replace_job)
-        .def("run_job", &JobQueue::run_job)
         .def("size", &JobQueue::size);
 
     py::class_<JobQueueProcessor>(m, "JobQueueProcessor")
         .def(py::init<>())
-        .def("run_batch", &JobQueueProcessor::run_batch,
-            py::call_guard<py::gil_scoped_release>(),  // Release GIL for parallel processing
-            "Process jobs from queue in parallel and stream results via callback");
+        .def("run_batch", &JobQueueProcessor::run_batch, "Process jobs from queue in parallel and stream results via callback");
 }

@@ -147,20 +147,26 @@ def create_option_jobs(options_data: Dict[str, List[Dict[str, Any]]]) -> List[op
     
     return jobs
 
-def continuous_poll_and_process(tickers: List[str], callback_function, time_interval: int = 30):
+def continuous_poll_and_process(
+    tickers: List[str], 
+    callback_function, 
+    stop_event, 
+    processor: option_solver_cpp.JobQueueProcessor, 
+    job_queue: option_solver_cpp.JobQueue,
+    time_interval: int = 30
+):
     """
     Continuously poll options data and process jobs with C++ JobQueueProcessor
     
     Args:
         tickers: List of ticker symbols
         callback_function: Function to call with each OptionJobResult
+        stop_event: threading.Event to signal stopping
+        processor: The JobQueueProcessor instance
+        job_queue: The JobQueue instance
         time_interval: Polling interval in seconds (default 30)
     """
-    # Create the processor and job queue
-    processor = option_solver_cpp.JobQueueProcessor()
-    job_queue = option_solver_cpp.JobQueue()
-    
-    while True:
+    while not stop_event.is_set():
         # Poll options data
         options_data = poll_options_data(tickers)
         
@@ -175,4 +181,5 @@ def continuous_poll_and_process(tickers: List[str], callback_function, time_inte
             # Process jobs in parallel and stream results via callback
             processor.run_batch(job_queue, callback_function)
         
-        time.sleep(time_interval)
+        # Wait for the next interval, but check stop_event periodically
+        stop_event.wait(time_interval)
